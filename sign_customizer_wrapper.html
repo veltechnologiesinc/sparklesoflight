@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personnalisateur de Panneau</title>
+    <style>
+        /* S'assurer que l'iframe remplit bien l'espace disponible */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Empêche les barres de défilement indésirables */
+        }
+        iframe {
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <iframe src="https://web.signcustomiser.com/embed/7263" allow="geolocation; microphone; camera"></iframe>
+
+    <script>
+        // L'URL de la page Wix Studio où cette page HTML sera intégrée
+        const WIX_PARENT_ORIGIN = 'https://www.sparklesoflight.com';
+
+        // L'URL d'origine de l'application Sign Customizer (l'iframe interne)
+        const SIGN_CUSTOMIZER_ORIGIN = 'https://web.signcustomiser.com';
+
+        // Écoute les messages de la fenêtre parente (ta page Wix Studio)
+        window.addEventListener('message', function(event) {
+            // IMPORTANT: Vérifie que le message vient bien de ta page Wix
+            if (event.origin !== WIX_PARENT_ORIGIN) {
+                console.warn("Message ignoré provenant d'une origine non autorisée:", event.origin);
+                return;
+            }
+
+            const message = event.data;
+
+            // Si le message est une demande de données de personnalisation de Wix
+            if (message && message.type === 'requestCustomSignData') {
+                try {
+                    const signCustomizerIframe = document.querySelector('iframe');
+                    if (!signCustomizerIframe || !signCustomizerIframe.contentWindow) {
+                        throw new Error("L'iframe du Sign Customizer n'est pas disponible.");
+                    }
+
+                    let designId = null;
+                    let price = null;
+
+                    // Tenter d'accéder aux fonctions exposées par Sign Customizer dans l'iframe
+                    // Basé sur leur documentation, ces fonctions devraient être disponibles dans le contexte de l'iframe.
+                    if (signCustomizerIframe.contentWindow && typeof signCustomizerIframe.contentWindow.sc_get_design_id === 'function') {
+                        designId = signCustomizerIframe.contentWindow.sc_get_design_id();
+                        price = signCustomizerIframe.contentWindow.sc_get_price();
+                    } else {
+                        console.warn("Les fonctions sc_get_design_id/sc_get_price ne sont pas directement accessibles depuis l'iframe. Veuillez vérifier la documentation ou le support de Sign Customizer pour une API JavaScript si cela persiste.");
+                        throw new Error("Impossible d'accéder aux données de Sign Customizer dans l'iframe.");
+                    }
+
+                    const customizationData = {
+                        designId: designId,
+                        price: price,
+                    };
+
+                    // Envoyer les données de personnalisation à la page Wix parente
+                    // `event.source` fait référence à la fenêtre qui a envoyé le message (ta page Wix).
+                    event.source.postMessage({
+                        type: 'customSignDataResponse',
+                        payload: customizationData
+                    }, WIX_PARENT_ORIGIN);
+
+                    console.log("Données de personnalisation du panneau envoyées à Wix depuis l'iframe wrapper:", customizationData);
+
+                } catch (error) {
+                    console.error("Erreur lors de la récupération des données de personnalisation dans le wrapper HTML:", error);
+                    // Envoie un message d'erreur à la page Wix parente
+                    event.source.postMessage({
+                        type: 'customSignDataError',
+                        payload: { message: error.message }
+                    }, WIX_PARENT_ORIGIN);
+                }
+            }
+        });
+
+        console.log("Script d'écoute de message chargé dans le wrapper HTML.");
+    </script>
+</body>
+</html>
